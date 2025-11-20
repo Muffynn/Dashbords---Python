@@ -30,8 +30,6 @@ def load_data():
     return data
 
 data = load_data()
-
-# Create Year column
 data['Year'] = data['Order Date'].dt.year
 
 # =========================
@@ -43,7 +41,6 @@ selected_years = st.sidebar.multiselect("Filter by Year (Sub-Category only)", ye
 categories = sorted(data['Sub-Category'].unique())
 selected_categories = st.sidebar.multiselect("Filter by Category", categories, default=categories)
 
-# Apply global filters (exclude Year)
 df = data[data['Sub-Category'].isin(selected_categories)]
 
 st.subheader("⊞ Super Store Dataset")
@@ -76,9 +73,10 @@ with st.container():
 # =========================
 color_sequence = ['#FC4100', '#FFC55A', '#2C4E80', '#00215E']
 continuous_scale = ['#00215E', '#2C4E80', '#FFC55A', '#FC4100']
+chart_height = 500  # consistent height for all charts
 
 # =========================
-# SALES BY YEAR (Continuous Colors)
+# SALES BY YEAR
 # =========================
 sales_by_year = df.groupby('Year')['Sales'].sum().reset_index()
 fig_year = px.bar(
@@ -86,9 +84,10 @@ fig_year = px.bar(
     color='Sales', color_continuous_scale=continuous_scale,
     title='Total Sales by Year'
 )
+fig_year.update_layout(height=chart_height)
 
 # =========================
-# SEGMENT SALES BAR CHART (Discrete Colors)
+# SEGMENT SALES
 # =========================
 segment_sales = df.groupby('Segment')['Sales'].sum().reset_index()
 fig_segment = px.bar(
@@ -100,6 +99,7 @@ fig_segment = px.bar(
     title='Total Sales by Segment',
     color_discrete_sequence=color_sequence
 )
+fig_segment.update_layout(height=chart_height)
 
 # =========================
 # Sub-Category TREND (Pie Chart)
@@ -128,6 +128,7 @@ fig_scatter = px.scatter(
     color_discrete_sequence=color_sequence,
     title='Sales vs Profit'
 )
+fig_scatter.update_layout(height=chart_height)
 
 # =========================
 # MAP (Continuous Colors)
@@ -153,9 +154,10 @@ fig_map = px.choropleth(
     color_continuous_scale=continuous_scale,
     title='Total Sales by State'
 )
+fig_map.update_layout(height=chart_height)
 
 # =========================
-# TOP 3 Most Profitable Sub-Categories (Discrete Colors)
+# TOP 3 Most Profitable Sub-Categories
 # =========================
 top_products = df.groupby('Sub-Category')['Profit'].sum().reset_index()
 top_products = top_products.sort_values(by='Profit', ascending=False).head(3)
@@ -168,12 +170,7 @@ fig_top_products = px.bar(
     title='Top 3 Most Profitable Sub-Categories',
     color_discrete_sequence=color_sequence[:len(top_products)]
 )
-fig_top_products.update_layout(
-    xaxis_title="Sub-Category",
-    yaxis_title="Profit",
-    xaxis_tickangle=0,
-    showlegend=False
-)
+fig_top_products.update_layout(height=chart_height, xaxis_tickangle=0, showlegend=False)
 
 # =========================
 # VISUALIZATION LAYOUT
