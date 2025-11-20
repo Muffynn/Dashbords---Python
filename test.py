@@ -1,11 +1,12 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 
 st.write("Testing Mode - Super Store Dashboard")
 
-# Define a function to load and cache the data
+# =========================
+# LOAD DATA
+# =========================
 @st.cache_data
 def load_data():
     data = pd.read_csv("./dataset/Super_Store_data.csv", encoding='ISO-8859-1', on_bad_lines='skip')
@@ -13,31 +14,88 @@ def load_data():
     data['Ship Date'] = pd.to_datetime(data['Ship Date'])
     return data
 
-# Call the function to load data
-data_load_state= st.text('Loading data...')
+data_load_state = st.text("Loading data...")
 data = load_data()
-data_load_state.text("Data Loaded!✅ (using st.cache_data)")
+data_load_state.text("Data Loaded! ✅ (using st.cache_data)")
 
-st.subheader('Super Store Data')
-st.write(data)
-
-
-# Create a 'Year' column from 'Order Date'
+# Create Year column
 data['Year'] = data['Order Date'].dt.year
-# Group by year and sum sales
-sales_by_year = data.groupby('Year')['Sales'].sum().reset_index()
 
-# Bar chart
-fig = px.bar(sales_by_year, x='Year', y='Sales', title='Total Sales by Year',
-             text_auto='.2s', color='Sales', color_continuous_scale='Oranges')
+# =========================
+# SIDEBAR FILTERS
+# =========================
+st.sidebar.header("Filters")
 
+# YEAR FILTER (for Sub-Category only)
+years = sorted(data['Year'].unique())
+selected_years = st.sidebar.multiselect("Filter by Year (Sub-Category only)", years, default=years)
 
-# Scatter plot of Sales vs Profit
-fig2 = px.scatter(data, x='Sales', y='Profit', color='Category', title='Sales vs Profit',
-                   hover_data=['Sub-Category'])
+# Sub-Category FILTER (applied globally)
+categories = sorted(data['Sub-Category'].unique())
+selected_categories = st.sidebar.multiselect("Filter by Category", categories, default=categories)
 
+# Apply global filters (exclude Year)
+df = data[data['Sub-Category'].isin(selected_categories)]
 
-#map dictionary for state abbreviations
+st.subheader("Super Store Data")
+st.write(df)
+
+# =========================
+# BUSINESS OVERVIEW CARDS
+# =========================
+st.markdown("""
+<style>
+.card { background-color: #f9f9f9; border-radius: 15px; padding: 20px;
+       box-shadow: 2px 2px 8px rgba(0,0,0,0.1); border: 1px solid #ddd; text-align: center; }
+.metric-label { font-size: 16px; color: #666; }
+.metric-value { font-size: 26px; font-weight: bold; color: #333; }
+</style>
+""", unsafe_allow_html=True)
+
+with st.container():
+    st.subheader("📊 Business Overview")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f"<div class='card'><div class='metric-label'>Total Sales</div><div class='metric-value'>${df['Sales'].sum():,.2f}</div></div>", unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"<div class='card'><div class='metric-label'>Average Profit</div><div class='metric-value'>${df['Profit'].mean():,.2f}</div></div>", unsafe_allow_html=True)
+    with col3:
+        st.markdown(f"<div class='card'><div class='metric-label'>Total Orders</div><div class='metric-value'>{df['Order ID'].nunique():,}</div></div>", unsafe_allow_html=True)
+
+# =========================
+# SALES BY YEAR (global)
+# =========================
+sales_by_year = df.groupby('Year')['Sales'].sum().reset_index()
+fig_year = px.bar(sales_by_year, x='Year', y='Sales', text_auto='.2s', color='Sales',
+                  color_continuous_scale='Oranges', title='Total Sales by Year')
+
+# =========================
+# Sub-Category TREND (filtered by Year AND Category)
+# =========================
+df_subcategory = data[
+    (data['Sub-Category'].isin(selected_categories)) &
+    (data['Year'].isin(selected_years))
+]
+df_subcategory['Month'] = df_subcategory['Order Date'].dt.to_period('M').astype(str)
+SubCategory_trend = df_subcategory.groupby(['Month', 'Sub-Category'])['Sales'].sum().reset_index()
+
+# Sort months chronologically
+SubCategory_trend['Month'] = pd.to_datetime(SubCategory_trend['Month'])
+SubCategory_trend = SubCategory_trend.sort_values('Month')
+SubCategory_trend['Month'] = SubCategory_trend['Month'].dt.strftime('%Y-%m')  # format nicely
+
+fig_cat_trend = px.bar(SubCategory_trend, x='Month', y='Sales', color='Sub-Category',
+                       barmode="group", title="Sub-Category Sales Trend Over Time",text_auto='.2s')
+
+# =========================
+# SCATTER (SALES VS PROFIT) - global
+# =========================
+fig_scatter = px.scatter(df, x='Sales', y='Profit', color='Category',
+                         hover_data=['Sub-Category'], title='Sales vs Profit')
+
+# =========================
+# MAP (global)
+# =========================
 state_abbrev = {
     'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
     'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'Florida': 'FL', 'Georgia': 'GA',
@@ -52,87 +110,28 @@ state_abbrev = {
     'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY'
 }
 
-#Map sales by state
-sales_by_state = data.groupby('State')['Sales'].sum().reset_index()
+sales_by_state = df.groupby('State')['Sales'].sum().reset_index()
 sales_by_state['Code'] = sales_by_state['State'].map(state_abbrev)
-fig3 = px.choropleth(
-    sales_by_state,
-    locations='Code',
-    locationmode='USA-states',
-    color='Sales',
-    hover_name='State',  # shows full name on hover
-    scope='usa',
-    color_continuous_scale='Reds',
-    title='Total Sales by State'
-)
 
+fig_map = px.choropleth(sales_by_state, locations='Code', locationmode='USA-states',
+                        color='Sales', hover_name='State', scope='usa',
+                        color_continuous_scale='Reds', title='Total Sales by State')
 
-
-# --- Custom CSS for Cards ---
-st.markdown("""
-<style>
-.card {
-    background-color: #f9f9f9;
-    border-radius: 15px;
-    padding: 20px;
-    box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
-    border: 1px solid #ddd;
-    text-align: center;
-}
-.metric-label {
-    font-size: 16px;
-    color: #666;
-}
-.metric-value {
-    font-size: 26px;
-    font-weight: bold;
-    color: #333;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# --- Container 1: Cards ---
-with st.container():
-    st.subheader("📊 Business Overview")
-
-    col1, col2, col3 = st.columns(3)
-
-    # Card 1
-    with col1:
-        st.markdown(f"""
-        <div class="card">
-            <div class="metric-label">Total Sales</div>
-            <div class="metric-value">${data['Sales'].sum():,.2f}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Card 2
-    with col2:
-        st.markdown(f"""
-        <div class="card">
-            <div class="metric-label">Average Profit</div>
-            <div class="metric-value">${data['Profit'].mean():,.2f}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Card 3
-    with col3:
-        st.markdown(f"""
-        <div class="card">
-            <div class="metric-label">Total Orders</div>
-            <div class="metric-value">{data['Order ID'].nunique():,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-# --- Container 2: Visual Dashboards ---
+# =========================
+# VISUALIZATION LAYOUT
+# =========================
 with st.container():
     st.subheader("📈 Sales Trends")
-    #figure order by columns
-    col1, col2 = st.columns(2)
+    colA, colB = st.columns(2)
+    with colA:
+        st.plotly_chart(fig_year, use_container_width=True)
+    with colB:
+        st.plotly_chart(fig_map, use_container_width=True)
+        # st.plotly_chart(fig_scatter, use_container_width=True)
 
-    with col1:
-        st.plotly_chart(fig, use_container_width=True)
-        st.plotly_chart(fig3, use_container_width=True)
-
-    with col2:
-        st.plotly_chart(fig2, use_container_width=True)
+# =========================
+# Full-width Sub-Category Trend
+# =========================
+with st.container():
+    st.subheader("📊 Sub-Category Trend")
+    st.plotly_chart(fig_cat_trend, use_container_width=True)
