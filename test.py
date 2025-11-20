@@ -2,7 +2,22 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.write("Testing Mode - Super Store Dashboard")
+# =========================
+# DASHBOARD TITLE
+# =========================
+st.markdown("""
+<style>
+.dashboard-title {
+    text-align: center;
+    font-size: 48px;
+    font-weight: bold;
+    color: #FF6F61;
+    font-family: 'Trebuchet MS', sans-serif;
+    margin-bottom: 30px;
+}
+</style>
+<div class="dashboard-title">📊 Super Store Dashboard</div>
+""", unsafe_allow_html=True)
 
 # =========================
 # LOAD DATA
@@ -14,9 +29,7 @@ def load_data():
     data['Ship Date'] = pd.to_datetime(data['Ship Date'])
     return data
 
-data_load_state = st.text("Loading data...")
 data = load_data()
-data_load_state.text("Data Loaded! ✅ (using st.cache_data)")
 
 # Create Year column
 data['Year'] = data['Order Date'].dt.year
@@ -25,19 +38,15 @@ data['Year'] = data['Order Date'].dt.year
 # SIDEBAR FILTERS
 # =========================
 st.sidebar.header("Filters")
-
-# YEAR FILTER (for Sub-Category only)
 years = sorted(data['Year'].unique())
 selected_years = st.sidebar.multiselect("Filter by Year (Sub-Category only)", years, default=years)
-
-# Sub-Category FILTER (applied globally)
 categories = sorted(data['Sub-Category'].unique())
 selected_categories = st.sidebar.multiselect("Filter by Category", categories, default=categories)
 
 # Apply global filters (exclude Year)
 df = data[data['Sub-Category'].isin(selected_categories)]
 
-st.subheader("Super Store Data")
+st.subheader("⊞ Super Store Dataset")
 st.write(df)
 
 # =========================
@@ -63,43 +72,65 @@ with st.container():
         st.markdown(f"<div class='card'><div class='metric-label'>Total Orders</div><div class='metric-value'>{df['Order ID'].nunique():,}</div></div>", unsafe_allow_html=True)
 
 # =========================
-# SALES BY YEAR (global)
+# Define 4-color palette
 # =========================
-sales_by_year = df.groupby('Year')['Sales'].sum().reset_index()
-fig_year = px.bar(sales_by_year, x='Year', y='Sales', text_auto='.2s', color='Sales',
-                  color_continuous_scale='Oranges', title='Total Sales by Year')
+color_sequence = ['#FC4100', '#FFC55A', '#2C4E80', '#00215E']
+continuous_scale = ['#00215E', '#2C4E80', '#FFC55A', '#FC4100']
 
 # =========================
-# Sub-Category TREND (Pie Chart) filtered by Year AND Category
+# SALES BY YEAR (Continuous Colors)
+# =========================
+sales_by_year = df.groupby('Year')['Sales'].sum().reset_index()
+fig_year = px.bar(
+    sales_by_year, x='Year', y='Sales', text_auto='.2s',
+    color='Sales', color_continuous_scale=continuous_scale,
+    title='Total Sales by Year'
+)
+
+# =========================
+# SEGMENT SALES BAR CHART (Discrete Colors)
+# =========================
+segment_sales = df.groupby('Segment')['Sales'].sum().reset_index()
+fig_segment = px.bar(
+    segment_sales,
+    x='Segment',
+    y='Sales',
+    color='Segment',
+    text_auto='.2s',
+    title='Total Sales by Segment',
+    color_discrete_sequence=color_sequence
+)
+
+# =========================
+# Sub-Category TREND (Pie Chart)
 # =========================
 df_subcategory = data[
     (data['Sub-Category'].isin(selected_categories)) &
     (data['Year'].isin(selected_years))
 ]
-
-# Aggregate total sales by Sub-Category
 subcategory_sales = df_subcategory.groupby('Sub-Category')['Sales'].sum().reset_index()
-
-# Create Pie chart
 fig_cat_trend = px.pie(
     subcategory_sales,
     names='Sub-Category',
     values='Sales',
     title="Sales Distribution by Sub-Category",
-    hole=0  # set >0 for donut chart if desired
+    hole=0,
+    color_discrete_sequence=color_sequence*10
 )
-
-# Add data labels (show percentage + label + value)
 fig_cat_trend.update_traces(textposition='inside', textinfo='percent+label+value')
 
 # =========================
-# SCATTER (SALES VS PROFIT) - global
+# SCATTER (SALES VS PROFIT)
 # =========================
-fig_scatter = px.scatter(df, x='Sales', y='Profit', color='Category',
-                         hover_data=['Sub-Category'], title='Sales vs Profit')
+fig_scatter = px.scatter(
+    df, x='Sales', y='Profit', color='Category',
+    hover_data=['Sub-Category'],
+    color_discrete_sequence=color_sequence,
+    title='Sales vs Profit'
+)
 
 # =========================
-# MAP (global)
+# MAP (Continuous Colors)
 # =========================
 state_abbrev = {
     'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
@@ -114,29 +145,51 @@ state_abbrev = {
     'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT', 'Virginia': 'VA', 'Washington': 'WA',
     'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY'
 }
-
 sales_by_state = df.groupby('State')['Sales'].sum().reset_index()
 sales_by_state['Code'] = sales_by_state['State'].map(state_abbrev)
+fig_map = px.choropleth(
+    sales_by_state, locations='Code', locationmode='USA-states',
+    color='Sales', hover_name='State', scope='usa',
+    color_continuous_scale=continuous_scale,
+    title='Total Sales by State'
+)
 
-fig_map = px.choropleth(sales_by_state, locations='Code', locationmode='USA-states',
-                        color='Sales', hover_name='State', scope='usa',
-                        color_continuous_scale='Reds', title='Total Sales by State')
+# =========================
+# TOP 3 Most Profitable Sub-Categories (Discrete Colors)
+# =========================
+top_products = df.groupby('Sub-Category')['Profit'].sum().reset_index()
+top_products = top_products.sort_values(by='Profit', ascending=False).head(3)
+fig_top_products = px.bar(
+    top_products,
+    x='Sub-Category',
+    y='Profit',
+    color='Sub-Category',
+    text_auto='.2s',
+    title='Top 3 Most Profitable Sub-Categories',
+    color_discrete_sequence=color_sequence[:len(top_products)]
+)
+fig_top_products.update_layout(
+    xaxis_title="Sub-Category",
+    yaxis_title="Profit",
+    xaxis_tickangle=0,
+    showlegend=False
+)
 
 # =========================
 # VISUALIZATION LAYOUT
 # =========================
 with st.container():
-    st.subheader("📈 Sales Trends")
     colA, colB = st.columns(2)
     with colA:
         st.plotly_chart(fig_year, use_container_width=True)
+        st.plotly_chart(fig_segment, use_container_width=True)
     with colB:
         st.plotly_chart(fig_map, use_container_width=True)
+        st.plotly_chart(fig_top_products, use_container_width=True)
         # st.plotly_chart(fig_scatter, use_container_width=True)
 
 # =========================
 # Full-width Sub-Category Trend (Pie Chart)
 # =========================
 with st.container():
-    st.subheader("📊 Sub-Category Trend (Pie Chart)")
     st.plotly_chart(fig_cat_trend, use_container_width=True)
