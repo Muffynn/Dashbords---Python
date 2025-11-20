@@ -70,22 +70,27 @@ fig_year = px.bar(sales_by_year, x='Year', y='Sales', text_auto='.2s', color='Sa
                   color_continuous_scale='Oranges', title='Total Sales by Year')
 
 # =========================
-# Sub-Category TREND (filtered by Year AND Category)
+# Sub-Category TREND (Pie Chart) filtered by Year AND Category
 # =========================
 df_subcategory = data[
     (data['Sub-Category'].isin(selected_categories)) &
     (data['Year'].isin(selected_years))
 ]
-df_subcategory['Month'] = df_subcategory['Order Date'].dt.to_period('M').astype(str)
-SubCategory_trend = df_subcategory.groupby(['Month', 'Sub-Category'])['Sales'].sum().reset_index()
 
-# Sort months chronologically
-SubCategory_trend['Month'] = pd.to_datetime(SubCategory_trend['Month'])
-SubCategory_trend = SubCategory_trend.sort_values('Month')
-SubCategory_trend['Month'] = SubCategory_trend['Month'].dt.strftime('%Y-%m')  # format nicely
+# Aggregate total sales by Sub-Category
+subcategory_sales = df_subcategory.groupby('Sub-Category')['Sales'].sum().reset_index()
 
-fig_cat_trend = px.bar(SubCategory_trend, x='Month', y='Sales', color='Sub-Category',
-                       barmode="group", title="Sub-Category Sales Trend Over Time",text_auto='.2s')
+# Create Pie chart
+fig_cat_trend = px.pie(
+    subcategory_sales,
+    names='Sub-Category',
+    values='Sales',
+    title="Sales Distribution by Sub-Category",
+    hole=0  # set >0 for donut chart if desired
+)
+
+# Add data labels (show percentage + label + value)
+fig_cat_trend.update_traces(textposition='inside', textinfo='percent+label+value')
 
 # =========================
 # SCATTER (SALES VS PROFIT) - global
@@ -130,8 +135,8 @@ with st.container():
         # st.plotly_chart(fig_scatter, use_container_width=True)
 
 # =========================
-# Full-width Sub-Category Trend
+# Full-width Sub-Category Trend (Pie Chart)
 # =========================
 with st.container():
-    st.subheader("📊 Sub-Category Trend")
+    st.subheader("📊 Sub-Category Trend (Pie Chart)")
     st.plotly_chart(fig_cat_trend, use_container_width=True)
